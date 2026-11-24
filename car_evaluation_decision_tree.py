@@ -18,6 +18,7 @@ TAHUN_1, TAHUN_2 = '2025', '2026'
 FILE_LOKAL = {TAHUN_1: 'Car_Evaluation_2025.xlsx', TAHUN_2: 'Car_Evaluation_2026.xlsx'}
 FILE_ASLI = '14_Car_Evaluation.xlsx'
 
+
 class AnalisisCar:
     NAMA_KOLOM = ['buying', 'maint', 'doors', 'persons', 'lug_boot', 'safety', 'class']
     FITUR = NAMA_KOLOM[:-1]
@@ -269,7 +270,6 @@ class ModelDecisionTree:
         names = encoder.get_feature_names_out()
         importance = self.pipeline.named_steps['pohon'].feature_importances_
         hasil = pd.DataFrame({'encoded_feature': names, 'importance': importance})
-        # Gabungkan importance berbagai kategori one-hot menjadi 6 fitur asli.
         return pd.Series({f: float(hasil.loc[
             hasil['encoded_feature'].str.startswith(f'kategori__{f}_'),
             'importance'].sum()) for f in self.fitur}).sort_values(ascending=False)
@@ -299,26 +299,53 @@ def muat_dataset(sumber, tahun):
 
 
 def tampilkan_grafik(fig):
-    st.pyplot(fig)
+    st.pyplot(fig, use_container_width=True)
     plt.close(fig)
 
 
-st.set_page_config(page_title='Car Evaluation 2025-2026 + Decision Tree',
-                   page_icon='🚗', layout='wide')
+st.set_page_config(
+    page_title='Car Evaluation 2025-2026 + Decision Tree',
+    page_icon='🚗',
+    layout='wide',
+)
+
+st.markdown("""
+<style>
+    div[data-testid="stMetric"] {
+        background-color: #1e293b;
+        border: 1px solid #334155;
+        padding: 14px 18px;
+        border-radius: 12px;
+    }
+    .badge-kelas {
+        display: inline-block;
+        padding: 6px 14px;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 1rem;
+        background-color: #0f172a;
+        border: 1px solid #38bdf8;
+        color: #7dd3fc;
+        margin: 6px 0 12px 0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.title('🚗 Car Evaluation Dashboard + Decision Tree')
 st.write('Analisis harga, keselamatan, kualitas mobil, dan prediksi kelas dengan machine learning.')
 st.divider()
 
-st.header('1. Memasukkan Dataset')
-st.caption('Upload dua file simulasi, ATAU gunakan file asli 14_Car_Evaluation.xlsx '
-           'yang secara otomatis dibagi dua untuk simulasi tahun.')
-a, b = st.columns(2)
-upload = {
-    TAHUN_1: a.file_uploader('Dataset 2025', type=['xlsx'], key='up1'),
-    TAHUN_2: b.file_uploader('Dataset 2026', type=['xlsx'], key='up2'),
-}
-file_asli_upload = st.file_uploader('Alternatif: upload dataset asli 14_Car_Evaluation.xlsx',
-                                     type=['xlsx'], key='asli')
+with st.container(border=True):
+    st.header('1. Memasukkan Dataset')
+    st.caption('Upload dua file simulasi, ATAU gunakan file asli 14_Car_Evaluation.xlsx '
+               'yang secara otomatis dibagi dua untuk simulasi tahun.')
+    a, b = st.columns(2)
+    upload = {
+        TAHUN_1: a.file_uploader('Dataset 2025', type=['xlsx'], key='up1'),
+        TAHUN_2: b.file_uploader('Dataset 2026', type=['xlsx'], key='up2'),
+    }
+    file_asli_upload = st.file_uploader('Alternatif: upload dataset asli 14_Car_Evaluation.xlsx',
+                                         type=['xlsx'], key='asli')
 
 sumber = {}
 for tahun in [TAHUN_1, TAHUN_2]:
@@ -347,7 +374,7 @@ except Exception as e:
     st.error(f'Terjadi kesalahan saat membaca Excel: {e}')
     st.stop()
 
-analisis = AnalisisCar(AnalisisCar .gabung(daftar_df))
+analisis = AnalisisCar(AnalisisCar.gabung(daftar_df))
 df = analisis.df
 masalah = analisis.validasi()
 if masalah:
@@ -359,17 +386,18 @@ if analisis.baris_kembar():
                'Periksa sumber data jika ini tidak disengaja.')
 st.success('Dataset berhasil dimuat!')
 
-st.header('2. Informasi Dataset')
-per_tahun = analisis.jumlah_per_tahun()
-k1, k2, k3, k4 = st.columns(4)
-k1.metric('Total Data Gabungan', f'{len(df):,}')
-k2.metric(f'Data {TAHUN_1}', f'{per_tahun.get(TAHUN_1, 0):,}')
-k3.metric(f'Data {TAHUN_2}', f'{per_tahun.get(TAHUN_2, 0):,}')
-k4.metric('Kategori Kualitas', df['class'].nunique())
-with st.expander('Lihat dataset gabungan dan nilai unik'):
-    st.dataframe(df, use_container_width=True)
-    for kolom in df.columns:
-        st.write(f'**{kolom}**: {sorted(df[kolom].unique())}')
+with st.container(border=True):
+    st.header('2. Informasi Dataset')
+    per_tahun = analisis.jumlah_per_tahun()
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric('Total Data Gabungan', f'{len(df):,}')
+    k2.metric(f'Data {TAHUN_1}', f'{per_tahun.get(TAHUN_1, 0):,}')
+    k3.metric(f'Data {TAHUN_2}', f'{per_tahun.get(TAHUN_2, 0):,}')
+    k4.metric('Kategori Kualitas', df['class'].nunique())
+    with st.expander('Lihat dataset gabungan dan nilai unik'):
+        st.dataframe(df, use_container_width=True)
+        for kolom in df.columns:
+            st.write(f'**{kolom}**: {sorted(df[kolom].unique())}')
 
 st.header('3. Analisis dan Machine Learning')
 (tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8) = st.tabs([
@@ -379,158 +407,176 @@ st.header('3. Analisis dan Machine Learning')
 ])
 
 with tab1:
-    st.subheader('Distribusi kelas - data gabungan')
-    kiri, kanan = st.columns([1, 2])
-    with kiri:
-        st.dataframe(analisis.jumlah_kelas().rename('Jumlah Mobil'))
-        n_unacc, p_unacc = analisis.persen_unacc()
-        st.metric('Persentase mobil unacc', f'{p_unacc:.2f}%')
-        st.write(f'{n_unacc:,} dari {len(df):,} mobil unacc.')
-    with kanan:
-        tampilkan_grafik(analisis.grafik_distribusi())
+    with st.container(border=True):
+        st.subheader('Distribusi kelas - data gabungan')
+        kiri, kanan = st.columns([1, 2])
+        with kiri:
+            st.dataframe(analisis.jumlah_kelas().rename('Jumlah Mobil'), use_container_width=True)
+            n_unacc, p_unacc = analisis.persen_unacc()
+            st.metric('Persentase mobil unacc', f'{p_unacc:.2f}%')
+            st.write(f'{n_unacc:,} dari {len(df):,} mobil unacc.')
+        with kanan:
+            tampilkan_grafik(analisis.grafik_distribusi())
 
 with tab2:
-    st.subheader('Crosstab buying vs class')
-    tabel_buying = analisis.tabel_silang('buying')
-    st.dataframe(tabel_buying)
-    tampilkan_grafik(analisis.grafik_tabel(
-        tabel_buying, 'Harga Beli vs Kelas', 'Harga beli', 'Jumlah mobil'))
-    st.subheader('Crosstab safety vs class')
-    tabel_safety = analisis.tabel_silang('safety')
-    st.dataframe(tabel_safety)
-    tampilkan_grafik(analisis.grafik_tabel(
-        tabel_safety, 'Keselamatan vs Kelas', 'Safety', 'Jumlah mobil'))
-    n, total = analisis.safety_high_unacc()
-    st.info(f'Safety=high yang unacc: {n} dari {total} ({n / total * 100 if total else 0:.2f}%).')
+    with st.container(border=True):
+        st.subheader('Crosstab buying vs class')
+        tabel_buying = analisis.tabel_silang('buying')
+        st.dataframe(tabel_buying, use_container_width=True)
+        tampilkan_grafik(analisis.grafik_tabel(
+            tabel_buying, 'Harga Beli vs Kelas', 'Harga beli', 'Jumlah mobil'))
+    with st.container(border=True):
+        st.subheader('Crosstab safety vs class')
+        tabel_safety = analisis.tabel_silang('safety')
+        st.dataframe(tabel_safety, use_container_width=True)
+        tampilkan_grafik(analisis.grafik_tabel(
+            tabel_safety, 'Keselamatan vs Kelas', 'Safety', 'Jumlah mobil'))
+        n, total = analisis.safety_high_unacc()
+        st.info(f'Safety=high yang unacc: {n} dari {total} ({n / total * 100 if total else 0:.2f}%).')
 
 with tab3:
-    st.subheader('Mobil good atau vgood')
-    bagus = analisis.mobil_bagus()
-    st.write(f'Jumlah: **{len(bagus)}** mobil.')
-    st.dataframe(bagus, use_container_width=True)
-    st.subheader('Ciri khas good/vgood')
-    daftar = list(analisis.ciri_khas().items())
-    for mulai in range(0, len(daftar), 3):
-        kolom_ui = st.columns(3)
-        for ui, (nama, sebaran) in zip(kolom_ui, daftar[mulai:mulai + 3]):
-            ui.write(f'**{nama}**')
-            ui.dataframe(sebaran.rename('Jumlah'))
-    n_low, n_unacc = analisis.safety_low()
-    st.info(f'Safety low: {n_unacc} dari {n_low} unacc '
-            f'({n_unacc / n_low * 100 if n_low else 0:.2f}%).')
+    with st.container(border=True):
+        st.subheader('Mobil good atau vgood')
+        bagus = analisis.mobil_bagus()
+        st.write(f'Jumlah: **{len(bagus)}** mobil.')
+        st.dataframe(bagus, use_container_width=True)
+    with st.container(border=True):
+        st.subheader('Ciri khas good/vgood')
+        daftar = list(analisis.ciri_khas().items())
+        for mulai in range(0, len(daftar), 3):
+            kolom_ui = st.columns(3)
+            for ui, (nama, sebaran) in zip(kolom_ui, daftar[mulai:mulai + 3]):
+                ui.write(f'**{nama}**')
+                ui.dataframe(sebaran.rename('Jumlah'), use_container_width=True)
+        n_low, n_unacc = analisis.safety_low()
+        st.info(f'Safety low: {n_unacc} dari {n_low} unacc '
+                f'({n_unacc / n_low * 100 if n_low else 0:.2f}%).')
 
 with tab4:
-    st.subheader('Mobil murah (buying=low)')
-    n, n_unacc, persen = analisis.buying_low()
-    st.info(f'Dari {n} mobil murah, {n_unacc} unacc ({persen:.2f}%).')
-    st.write('**Jawaban:** Mobil murah belum tentu acceptable.' if n_unacc
-             else '**Jawaban:** Semua mobil murah pada data ini acceptable.')
-    proporsi = analisis.tabel_silang('buying', persen=True)
-    st.dataframe(proporsi.round(2))
-    tampilkan_grafik(analisis.grafik_tabel(
-        proporsi, 'Persentase Kelas per Harga', 'Harga beli', 'Persentase (%)'))
+    with st.container(border=True):
+        st.subheader('Mobil murah (buying=low)')
+        n, n_unacc, persen = analisis.buying_low()
+        st.info(f'Dari {n} mobil murah, {n_unacc} unacc ({persen:.2f}%).')
+        st.write('**Jawaban:** Mobil murah belum tentu acceptable.' if n_unacc
+                 else '**Jawaban:** Semua mobil murah pada data ini acceptable.')
+        proporsi = analisis.tabel_silang('buying', persen=True)
+        st.dataframe(proporsi.round(2), use_container_width=True)
+        tampilkan_grafik(analisis.grafik_tabel(
+            proporsi, 'Persentase Kelas per Harga', 'Harga beli', 'Persentase (%)'))
 
 with tab5:
-    st.subheader('Rekomendasi mobil')
-    kiri, kanan = st.columns(2)
-    pilihan = kiri.selectbox('Pilih kategori harga:', analisis.URUTAN_LEVEL)
-    pilihan_tahun = kanan.selectbox('Pilih sumber tahun:', ['Semua'] + analisis.daftar_tahun)
-    hasil = analisis.rekomendasi(pilihan, pilihan_tahun)
-    if hasil.empty:
-        st.warning('Tidak ada mobil Good atau Very Good pada pilihan ini.')
-    else:
-        st.success(f'Ditemukan {len(hasil)} pilihan good/vgood.')
-        st.dataframe(hasil, use_container_width=True)
+    with st.container(border=True):
+        st.subheader('Rekomendasi mobil')
+        kiri, kanan = st.columns(2)
+        pilihan = kiri.selectbox('Pilih kategori harga:', analisis.URUTAN_LEVEL)
+        pilihan_tahun = kanan.selectbox('Pilih sumber tahun:', ['Semua'] + analisis.daftar_tahun)
+        hasil = analisis.rekomendasi(pilihan, pilihan_tahun)
+        if hasil.empty:
+            st.warning('Tidak ada mobil Good atau Very Good pada pilihan ini.')
+        else:
+            st.success(f'Ditemukan {len(hasil)} pilihan good/vgood.')
+            st.dataframe(hasil, use_container_width=True)
 
 with tab6:
-    st.subheader('6. ' + AnalisisCar.JUDUL_PERBANDINGAN)
-    st.warning(AnalisisCar.CATATAN_SIMULASI)
-    st.write('**Parameter:** buying=low, safety=high; dipersempit class=acc.')
-    hasil_banding = analisis.kriteria_per_tahun()
-    st.dataframe(hasil_banding)
-    tampilkan_grafik(analisis.grafik_perbandingan(hasil_banding))
-    st.write('Rincian kelas pada buying=low & safety=high:')
-    st.dataframe(analisis.detail_kelas_per_tahun())
-    st.write('Sebaran buying tiap tahun:')
-    st.dataframe(analisis.sebaran_buying_per_tahun())
-    for kalimat in analisis.ringkas_perbandingan():
-        st.write('- ' + kalimat)
-    st.info(analisis.penjelasan_perbedaan())
+    with st.container(border=True):
+        st.subheader('6. ' + AnalisisCar.JUDUL_PERBANDINGAN)
+        st.warning(AnalisisCar.CATATAN_SIMULASI)
+        st.write('**Parameter:** buying=low, safety=high; dipersempit class=acc.')
+        hasil_banding = analisis.kriteria_per_tahun()
+        st.dataframe(hasil_banding, use_container_width=True)
+        tampilkan_grafik(analisis.grafik_perbandingan(hasil_banding))
+        st.write('Rincian kelas pada buying=low & safety=high:')
+        st.dataframe(analisis.detail_kelas_per_tahun(), use_container_width=True)
+        st.write('Sebaran buying tiap tahun:')
+        st.dataframe(analisis.sebaran_buying_per_tahun(), use_container_width=True)
+        for kalimat in analisis.ringkas_perbandingan():
+            st.write('- ' + kalimat)
+        st.info(analisis.penjelasan_perbedaan())
 
 with tab7:
-    st.subheader('Kesimpulan analisis')
-    for kalimat in analisis.kesimpulan():
-        st.write('- ' + kalimat)
-    st.download_button('Unduh rekap hasil (.txt)', data=analisis.rekap_teks(),
-                       file_name='rekap_hasil.txt')
+    with st.container(border=True):
+        st.subheader('Kesimpulan analisis')
+        for kalimat in analisis.kesimpulan():
+            st.write('- ' + kalimat)
+        st.download_button('Unduh rekap hasil (.txt)', data=analisis.rekap_teks(),
+                           file_name='rekap_hasil.txt')
 
 with tab8:
-    st.subheader('🤖 Decision Tree Classifier')
-    st.write('Model memprediksi **class** dari enam atribut mobil. '
-             'Data dipecah menjadi latih/uji dengan stratifikasi kelas dan random_state=42.')
-    opsi1, opsi2, opsi3 = st.columns(3)
-    persen_uji = opsi1.slider('Data uji (%)', min_value=10, max_value=40,
-                              value=20, step=5)
-    max_depth = opsi2.slider('Kedalaman maksimum tree', min_value=2, max_value=25,
-                              value=8, step=1)
-    leaf = opsi3.slider('Minimal sampel per leaf', min_value=1, max_value=20,
-                         value=1, step=1)
-    try:
-        model = ModelDecisionTree(df, test_size=persen_uji / 100,
-                                  max_depth=max_depth, min_samples_leaf=leaf)
-    except ValueError as e:
-        st.error(f'Gagal melatih Decision Tree: {e}')
-        st.stop()
-    st.caption(f'Data latih: {len(model.X_train):,} | '
-               f'Data uji: {len(model.X_test):,} | '
-               'Encoder: One-Hot | Algoritma: DecisionTreeClassifier')
-    hasil_metrik = model.evaluasi()
-    koloms = st.columns(4)
-    for kolom, (nama, nilai) in zip(koloms, hasil_metrik.items()):
-        kolom.metric(nama, f'{nilai * 100:.2f}%')
+    with st.container(border=True):
+        st.subheader('🤖 Decision Tree Classifier')
+        st.write('Model memprediksi **class** dari enam atribut mobil. '
+                 'Data dipecah menjadi latih/uji dengan stratifikasi kelas dan random_state=42.')
+        opsi1, opsi2, opsi3 = st.columns(3)
+        persen_uji = opsi1.slider('Data uji (%)', min_value=10, max_value=40,
+                                  value=20, step=5)
+        max_depth = opsi2.slider('Kedalaman maksimum tree', min_value=2, max_value=25,
+                                  value=8, step=1)
+        leaf = opsi3.slider('Minimal sampel per leaf', min_value=1, max_value=20,
+                             value=1, step=1)
+        try:
+            model = ModelDecisionTree(df, test_size=persen_uji / 100,
+                                      max_depth=max_depth, min_samples_leaf=leaf)
+        except ValueError as e:
+            st.error(f'Gagal melatih Decision Tree: {e}')
+            st.stop()
+        st.caption(f'Data latih: {len(model.X_train):,} | '
+                   f'Data uji: {len(model.X_test):,} | '
+                   'Encoder: One-Hot | Algoritma: DecisionTreeClassifier')
+        hasil_metrik = model.evaluasi()
+        koloms = st.columns(4)
+        for kolom, (nama, nilai) in zip(koloms, hasil_metrik.items()):
+            kolom.metric(nama, f'{nilai * 100:.2f}%')
 
-    st.subheader('Evaluasi model')
-    kiri, kanan = st.columns([1, 1])
-    with kiri:
-        st.write('**Classification Report**')
-        st.dataframe(model.laporan().round(3), use_container_width=True)
-    with kanan:
-        tampilkan_grafik(model.confusion_figure())
+    with st.container(border=True):
+        st.subheader('Evaluasi model')
+        kiri, kanan = st.columns([1, 1])
+        with kiri:
+            st.write('**Classification Report**')
+            st.dataframe(model.laporan().round(3), use_container_width=True)
+        with kanan:
+            tampilkan_grafik(model.confusion_figure())
 
-    st.subheader('Feature Importance')
-    penting = model.feature_importance()
-    st.bar_chart(penting)
-    st.dataframe(penting.rename('Importance').to_frame(), use_container_width=True)
+    with st.container(border=True):
+        st.subheader('Feature Importance')
+        penting = model.feature_importance()
+        st.bar_chart(penting)
+        st.dataframe(penting.rename('Importance').to_frame(), use_container_width=True)
 
-    st.subheader('Visualisasi Decision Tree')
-    st.caption('Agar terbaca, tampilan pohon dibatasi hingga beberapa level; '
-               'model tetap memanfaatkan kedalaman yang dipilih di atas.')
-    tampilan_depth = st.slider('Kedalaman pohon yang ditampilkan', 1, 4, 3)
-    tampilkan_grafik(model.tree_figure(max_plot_depth=tampilan_depth))
+    with st.container(border=True):
+        st.subheader('Visualisasi Decision Tree')
+        st.caption('Agar terbaca, tampilan pohon dibatasi hingga beberapa level; '
+                   'model tetap memanfaatkan kedalaman yang dipilih di atas.')
+        tampilan_depth = st.slider('Kedalaman pohon yang ditampilkan', 1, 4, 3)
+        tampilkan_grafik(model.tree_figure(max_plot_depth=tampilan_depth))
 
-    st.subheader('🔮 Prediksi kualitas mobil')
-    with st.form('form_prediksi'):
-        kiri, kanan, ketiga = st.columns(3)
-        input_mobil = {
-            'buying': kiri.selectbox('Harga beli (buying)', AnalisisCar.URUTAN_LEVEL),
-            'maint': kanan.selectbox('Biaya perawatan (maint)', AnalisisCar.URUTAN_LEVEL),
-            'doors': ketiga.selectbox('Jumlah pintu (doors)', ['2', '3', '4', '5more']),
-            'persons': kiri.selectbox('Kapasitas penumpang (persons)', ['2', '4', 'more']),
-            'lug_boot': kanan.selectbox('Bagasi (lug_boot)', ['small', 'med', 'big']),
-            'safety': ketiga.selectbox('Keselamatan (safety)', AnalisisCar.URUTAN_SAFETY),
-        }
-        tombol_prediksi = st.form_submit_button('Prediksi Kelas Mobil', type='primary')
-    if tombol_prediksi:
-        kelas, probabilitas = model.predict(input_mobil)
-        keterangan = {'unacc': 'Unacceptable (tidak layak)',
-                      'acc': 'Acceptable (cukup layak)',
-                      'good': 'Good (baik)', 'vgood': 'Very Good (sangat baik)'}
-        st.success(f'Prediksi kelas: **{kelas.upper()}** - {keterangan[kelas]}')
-        st.write('**Estimasi probabilitas per kelas (menurut model):**')
-        st.bar_chart(probabilitas)
-        st.dataframe(probabilitas.round(2).rename('Probabilitas (%)').to_frame())
-        st.caption('Prediksi adalah keluaran model dari dataset evaluasi sintetis, '
-                   'bukan inspeksi keselamatan atau rekomendasi membeli mobil nyata.')
+    with st.container(border=True):
+        st.subheader('🔮 Prediksi kualitas mobil')
+        with st.form('form_prediksi'):
+            kiri, kanan, ketiga = st.columns(3)
+            input_mobil = {
+                'buying': kiri.selectbox('Harga beli (buying)', AnalisisCar.URUTAN_LEVEL),
+                'maint': kanan.selectbox('Biaya perawatan (maint)', AnalisisCar.URUTAN_LEVEL),
+                'doors': ketiga.selectbox('Jumlah pintu (doors)', ['2', '3', '4', '5more']),
+                'persons': kiri.selectbox('Kapasitas penumpang (persons)', ['2', '4', 'more']),
+                'lug_boot': kanan.selectbox('Bagasi (lug_boot)', ['small', 'med', 'big']),
+                'safety': ketiga.selectbox('Keselamatan (safety)', AnalisisCar.URUTAN_SAFETY),
+            }
+            tombol_prediksi = st.form_submit_button('Prediksi Kelas Mobil', type='primary')
+        if tombol_prediksi:
+            kelas, probabilitas = model.predict(input_mobil)
+            keterangan = {'unacc': 'Unacceptable (tidak layak)',
+                          'acc': 'Acceptable (cukup layak)',
+                          'good': 'Good (baik)', 'vgood': 'Very Good (sangat baik)'}
+            st.markdown(
+                f'<span class="badge-kelas">{kelas.upper()}</span>',
+                unsafe_allow_html=True,
+            )
+            st.success(f'Prediksi kelas: **{kelas.upper()}** - {keterangan[kelas]}')
+            st.write('**Estimasi probabilitas per kelas (menurut model):**')
+            st.bar_chart(probabilitas)
+            st.dataframe(probabilitas.round(2).rename('Probabilitas (%)').to_frame())
+            st.caption('Prediksi adalah keluaran model dari dataset evaluasi sintetis, '
+                       'bukan inspeksi keselamatan atau rekomendasi membeli mobil nyata.')
 
 st.divider()
 st.caption(f'Tugas Besar Python - {NAMA_KELOMPOK}')
